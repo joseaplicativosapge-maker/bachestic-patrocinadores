@@ -10,7 +10,8 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         allowedHosts: [
           'bachesticsport.com',
-          'www.bachesticsport.com'
+          'www.bachesticsport.com',
+          'sponsors.bachesticsport.com'
         ]
       },
       plugins: [react()],
