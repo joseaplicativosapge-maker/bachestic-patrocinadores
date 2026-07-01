@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS `sponsors` (
   `commission_percent` DECIMAL(5,2) DEFAULT 5.00,
   `status` ENUM('pending','active','rejected') DEFAULT 'active',
   `clicks` INT DEFAULT 0,
+  `reset_token` VARCHAR(255) NULL,
+  `reset_token_expires` DATETIME NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_sponsor_code` (`sponsor_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

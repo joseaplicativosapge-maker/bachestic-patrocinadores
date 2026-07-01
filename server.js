@@ -5,9 +5,33 @@ import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 
 const app = express();
 const port = process.env.PORT || 3002;
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const sendEmail = async (to, subject, html) => {
+  if (!process.env.SMTP_USER) {
+    console.log('[EMAIL] SMTP no configurado, simulado:', { to, subject });
+    return;
+  }
+  await transporter.sendMail({
+    from: `"Elite Sports Urban Hub" <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    html,
+  });
+};
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -89,6 +113,12 @@ async function runMigrations() {
   // Migrar affiliates a sponsors
   try {
     await pool.query(`ALTER TABLE sponsors ADD COLUMN clicks INT DEFAULT 0`);
+  } catch (_) { /* columna ya existe */ }
+  try {
+    await pool.query(`ALTER TABLE sponsors ADD COLUMN reset_token VARCHAR(255) NULL`);
+  } catch (_) { /* columna ya existe */ }
+  try {
+    await pool.query(`ALTER TABLE sponsors ADD COLUMN reset_token_expires DATETIME NULL`);
   } catch (_) { /* columna ya existe */ }
   try {
     const [existing] = await pool.query(`SELECT COUNT(*) as cnt FROM sponsors`);
@@ -1263,6 +1293,36 @@ app.post('/api/sponsors', async (req, res) => {
       [name, email, phone || null, sponsorCode, passwordHash, commission_percent || 5.00]
     );
 
+    const sponsorLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?ref=${sponsorCode}`;
+
+    await sendEmail(
+      email,
+      'Bienvenido a Elite Sports Urban Hub - Tus credenciales de Patrocinador',
+      `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#fff;border-radius:20px;overflow:hidden;border:1px solid #27272a">
+        <div style="background:#111;padding:30px;text-align:center;border-bottom:2px solid #dc2626">
+          <h1 style="color:#dc2626;font-size:28px;margin:0;font-style:italic">ELITE SPORTS</h1>
+          <p style="color:#71717a;font-size:11px;letter-spacing:3px;margin:4px 0 0">URBAN HUB</p>
+        </div>
+        <div style="padding:30px">
+          <h2 style="color:#16a34a;font-size:18px;margin:0 0 8px">¡Bienvenido, ${name}!</h2>
+          <p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 24px">
+            Fuiste registrado como patrocinador oficial de Elite Sports Urban Hub.
+            Con estas credenciales podés acceder a tu panel y empezar a generar comisiones.
+          </p>
+          <div style="background:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:24px">
+            <p style="color:#71717a;font-size:10px;letter-spacing:2px;margin:0 0 12px">TUS CREDENCIALES</p>
+            <p style="color:#fff;font-size:14px;margin:0 0 6px"><span style="color:#71717a">Email:</span> ${email}</p>
+            <p style="color:#fff;font-size:14px;margin:0 0 6px"><span style="color:#71717a">Contraseña:</span> ${password}</p>
+            <p style="color:#fff;font-size:14px;margin:0"><span style="color:#71717a">Código:</span> ${sponsorCode}</p>
+          </div>
+          <div style="background:#dc2626;border-radius:12px;text-align:center;padding:0">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/?ref=${sponsorCode}" style="display:block;padding:16px;color:#fff;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:2px">ACCEDER AL PANEL</a>
+          </div>
+          <p style="color:#52525b;font-size:11px;text-align:center;margin:20px 0 0">Comisión base: ${commission_percent || 5}% · Tu link: ${sponsorLink}</p>
+        </div>
+      </div>`
+    );
+
     res.status(201).json({
       message: 'Patrocinador creado exitosamente',
       sponsor: { id: result.insertId, name, email, sponsor_code: sponsorCode, commission_percent: commission_percent || 5.00, status: 'active' }
@@ -1302,6 +1362,139 @@ app.post('/api/sponsors/login', async (req, res) => {
     }
 
     res.json({ success: true, sponsor });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors/forgot-password:
+ *   post:
+ *     summary: Solicitar recuperación de contraseña
+ */
+app.post('/api/sponsors/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requerido' });
+
+    const [rows] = await pool.query(
+      `SELECT id, name, email, sponsor_code FROM sponsors WHERE email = ? AND status = 'active'`,
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña.' });
+    }
+
+    const sponsor = rows[0];
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 3600000); // 1 hora
+
+    await pool.query(
+      `UPDATE sponsors SET reset_token = ?, reset_token_expires = ? WHERE id = ?`,
+      [resetToken, resetExpires, sponsor.id]
+    );
+
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}?reset=${resetToken}`;
+
+    await sendEmail(
+      email,
+      'Recuperación de contraseña - Elite Sports Urban Hub',
+      `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#0a0a0a;color:#fff;border-radius:20px;overflow:hidden;border:1px solid #27272a">
+        <div style="background:#111;padding:30px;text-align:center;border-bottom:2px solid #dc2626">
+          <h1 style="color:#dc2626;font-size:28px;margin:0;font-style:italic">ELITE SPORTS</h1>
+          <p style="color:#71717a;font-size:11px;letter-spacing:3px;margin:4px 0 0">URBAN HUB</p>
+        </div>
+        <div style="padding:30px">
+          <h2 style="color:#fff;font-size:18px;margin:0 0 8px">Recuperá tu contraseña</h2>
+          <p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 24px">
+            Hola ${sponsor.name}, recibimos una solicitud para restablecer tu contraseña.
+            Hacé clic en el botón de abajo para crear una nueva.
+          </p>
+          <div style="background:#dc2626;border-radius:12px;text-align:center;padding:0;margin-bottom:24px">
+            <a href="${resetLink}" style="display:block;padding:16px;color:#fff;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:2px">RESTABLECER CONTRASEÑA</a>
+          </div>
+          <p style="color:#52525b;font-size:11px;line-height:1.5;margin:0">
+            Este link expira en 1 hora. Si no solicitaste este cambio, ignorá este mensaje.<br/>
+            Código: ${sponsor.sponsor_code}
+          </p>
+        </div>
+      </div>`
+    );
+
+    res.json({ message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors/reset-password:
+ *   post:
+ *     summary: Restablecer contraseña con token
+ */
+app.post('/api/sponsors/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token y nueva contraseña requeridos' });
+    if (password.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+
+    const [rows] = await pool.query(
+      `SELECT id, name FROM sponsors WHERE reset_token = ? AND reset_token_expires > NOW()`,
+      [token]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'Token inválido o expirado' });
+    }
+
+    const passwordHash = hashPassword(password);
+    await pool.query(
+      `UPDATE sponsors SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?`,
+      [passwordHash, rows[0].id]
+    );
+
+    res.json({ success: true, message: 'Contraseña restablecida correctamente' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors/change-password:
+ *   post:
+ *     summary: Cambiar contraseña (patrocinador autenticado)
+ */
+app.post('/api/sponsors/change-password', async (req, res) => {
+  try {
+    const { sponsor_code, currentPassword, newPassword } = req.body;
+    if (!sponsor_code || !currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Código de patrocinador, contraseña actual y nueva son requeridos' });
+    }
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres' });
+    }
+
+    const currentHash = hashPassword(currentPassword);
+    const [rows] = await pool.query(
+      `SELECT id FROM sponsors WHERE sponsor_code = ? AND password_hash = ? AND status = 'active'`,
+      [sponsor_code, currentHash]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+    }
+
+    const newHash = hashPassword(newPassword);
+    await pool.query(
+      `UPDATE sponsors SET password_hash = ? WHERE id = ?`,
+      [newHash, rows[0].id]
+    );
+
+    res.json({ success: true, message: 'Contraseña actualizada correctamente' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

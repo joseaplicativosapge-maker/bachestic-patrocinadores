@@ -3,10 +3,10 @@ version: '3.8'
 services:
   db:
     image: mysql:8.0
-    container_name: bachestic-db
+    container_name: bachestic-db-sponsors
     restart: always
     environment:
-      MYSQL_DATABASE: bachestic_db
+      MYSQL_DATABASE: bachestic_db_sponsors
       MYSQL_ROOT_PASSWORD: root_password_seguro
     volumes:
       - bachestic_db_data:/var/lib/mysql
@@ -27,11 +27,11 @@ services:
     container_name: bachestic-backend
     restart: always
     environment:
-      - DATABASE_URL=mysql://root:root_password_seguro@db:3306/bachestic_db
+      - DATABASE_URL=mysql://root:root_password_seguro@db:3306/bachestic_db_sponsors
       - JWT_SECRET=bachestic_SaaS_2025_secure_key
       - PORT=3002
-      - VITE_API_BASE=https://bachesticsport.com
-      - FRONTEND_URL=https://bachesticsport.com
+      - VITE_API_BASE=https://sponsors.bachestic.com
+      - FRONTEND_URL=https://sponsors.bachestic.com
       - WOMPI_ENV=production
       # Wompi Bachestic
       - WOMPI_PUBLIC_KEY_BACHESTIC=pub_test_xxxxx
@@ -44,7 +44,7 @@ services:
       - WOMPI_EVENTS_SECRET_LOSELITE=prod_events_8jcSbhorxaZ0BoYml2yUTFUCfHoDdyZD
       - WOMPI_INTEGRITY_SECRET_LOSELITE=prod_integrity_0gpwXOQYiqkhPRDl2DFFir9NLDPY0gZF
     ports:
-      - "3002:3002"
+      - "3020:3002"
     depends_on:
       db:
         condition: service_healthy
@@ -58,7 +58,7 @@ services:
     container_name: bachestic-frontend
     restart: always
     ports:
-      - "5173:5173"
+      - "5180:5173"
     depends_on:
       - backend
     networks:

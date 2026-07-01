@@ -35,7 +35,7 @@ El backend está en server.js. Para ejecutarlo:
     DB_HOST=localhost
     DB_USER=root
     DB_PASSWORD=tu_password_aqui
-    DB_NAME=bachestic_db
+    DB_NAME=bachestic_db_sponsors
     PORT=3001
     API_KEY=tu_api_key_de_gemini
 

@@ -267,4 +267,31 @@ export const apiService = {
     return res.json();
   },
 
+  async forgotPassword(email: string) {
+    const res = await fetch(`${API_BASE}/sponsors/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  },
+
+  async resetPassword(token: string, password: string) {
+    const res = await fetch(`${API_BASE}/sponsors/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    });
+    return res.json();
+  },
+
+  async changePassword(sponsor_code: string, currentPassword: string, newPassword: string) {
+    const res = await fetch(`${API_BASE}/sponsors/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sponsor_code, currentPassword, newPassword }),
+    });
+    return res.json();
+  },
+
 };

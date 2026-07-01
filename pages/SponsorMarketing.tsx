@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { apiService } from '../services/api';
 import {
   Link, Copy, DollarSign, ShoppingCart, Users, TrendingUp,
   LogOut, Mail, Lock, Activity, X,
-  Package, Percent, RefreshCw, CheckCircle2, AlertTriangle
+  Package, Percent, RefreshCw, CheckCircle2, AlertTriangle,
+  Key, ArrowLeft, Send
 } from 'lucide-react';
 import { SponsorStats, SponsorCommission, SponsorProductCommission } from '../types';
 
@@ -26,11 +28,36 @@ const SponsorMarketing: React.FC = () => {
   const [productCommissions, setProductCommissions] = useState<SponsorProductCommission[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
 
+  // Forgot password
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+
+  // Reset password
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+
+  // Change password
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [changingPwd, setChangingPwd] = useState(false);
+
   const sponsorLink = `${window.location.origin}/?ref=${sponsorData?.sponsor_code || ''}`;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('reset');
+    if (token) {
+      setResetToken(token);
+    }
+  }, []);
 
   useEffect(() => {
     if (sponsorData) {
       loadDashboard();
+      setForgotMode(false);
     }
   }, [sponsorData]);
 
@@ -71,6 +98,53 @@ const SponsorMarketing: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) return showMsg('Ingresá tu email', true);
+    setLoading(true);
+    const result = await apiService.forgotPassword(forgotEmail);
+    setLoading(false);
+    showMsg(result.message || 'Revisá tu correo');
+    setForgotMode(false);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPassword || !resetConfirm) return showMsg('Completá ambos campos', true);
+    if (resetPassword.length < 4) return showMsg('Mínimo 4 caracteres', true);
+    if (resetPassword !== resetConfirm) return showMsg('Las contraseñas no coinciden', true);
+    setLoading(true);
+    const result = await apiService.resetPassword(resetToken!, resetPassword);
+    setLoading(false);
+    if (result.success) {
+      showMsg('Contraseña restablecida. Ya podés iniciar sesión.');
+      setResetToken(null);
+      setResetPassword('');
+      setResetConfirm('');
+    } else {
+      showMsg(result.error || 'Error al restablecer', true);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPwd || !newPwd || !confirmPwd) return showMsg('Completá todos los campos', true);
+    if (newPwd.length < 4) return showMsg('Mínimo 4 caracteres', true);
+    if (newPwd !== confirmPwd) return showMsg('Las contraseñas no coinciden', true);
+    setChangingPwd(true);
+    const result = await apiService.changePassword(sponsorData.sponsor_code, currentPwd, newPwd);
+    setChangingPwd(false);
+    if (result.success) {
+      showMsg('Contraseña actualizada');
+      setShowChangePwd(false);
+      setCurrentPwd('');
+      setNewPwd('');
+      setConfirmPwd('');
+    } else {
+      showMsg(result.error || 'Error al cambiar contraseña', true);
+    }
+  };
+
   const handleLogout = () => {
     logoutSponsor();
     setStats(null);
@@ -89,6 +163,117 @@ const SponsorMarketing: React.FC = () => {
   const formatCOP = (amount: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
 
+  // ── RESET PASSWORD VIEW ───────────────────────────────────
+  if (resetToken) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center px-4 pt-28 pb-16">
+        <div className="w-full max-w-md">
+          {(error || success) && (
+            <div className={`mb-6 px-5 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-3
+              ${error ? 'bg-red-600/20 border border-red-600 text-red-400' : 'bg-green-600/20 border border-green-600 text-green-400'}`}>
+              {error ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+              {error || success}
+            </div>
+          )}
+
+          <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-red-600/10 rounded-2xl flex items-center justify-center mx-auto">
+                <Key size={28} className="text-red-600" />
+              </div>
+              <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">
+                Nueva Contraseña
+              </h2>
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                Elegí una contraseña nueva para tu cuenta
+              </p>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">Nueva contraseña</label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
+                  <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)}
+                    placeholder="Mínimo 4 caracteres"
+                    className="w-full bg-black border border-zinc-800 text-white pl-11 pr-4 py-4 rounded-xl text-sm outline-none focus:border-red-600 transition-colors" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">Confirmar contraseña</label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
+                  <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
+                    placeholder="Repetí la contraseña"
+                    className="w-full bg-black border border-zinc-800 text-white pl-11 pr-4 py-4 rounded-xl text-sm outline-none focus:border-red-600 transition-colors" />
+                </div>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50">
+                {loading ? <Activity className="animate-spin" size={16} /> : <Key size={16} />}
+                Restablecer Contraseña
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── FORGOT PASSWORD VIEW ──────────────────────────────────
+  if (forgotMode) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center px-4 pt-28 pb-16">
+        <div className="w-full max-w-md">
+          {(error || success) && (
+            <div className={`mb-6 px-5 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-3
+              ${error ? 'bg-red-600/20 border border-red-600 text-red-400' : 'bg-green-600/20 border border-green-600 text-green-400'}`}>
+              {error ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+              {error || success}
+            </div>
+          )}
+
+          <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-red-600/10 rounded-2xl flex items-center justify-center mx-auto">
+                <Mail size={28} className="text-red-600" />
+              </div>
+              <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">
+                Recuperar Contraseña
+              </h2>
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                Te enviaremos un link para restablecerla
+              </p>
+            </div>
+
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">Email</label>
+                <div className="relative">
+                  <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
+                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                    placeholder="tu@email.com"
+                    className="w-full bg-black border border-zinc-800 text-white pl-11 pr-4 py-4 rounded-xl text-sm outline-none focus:border-red-600 transition-colors" />
+                </div>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50">
+                {loading ? <Activity className="animate-spin" size={16} /> : <Send size={16} />}
+                Enviar Link
+              </button>
+            </form>
+
+            <button onClick={() => { setForgotMode(false); setForgotEmail(''); }}
+              className="w-full flex items-center justify-center gap-2 py-3 text-zinc-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors">
+              <ArrowLeft size={14} /> Volver al inicio de sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LOGIN ─────────────────────────────────────────────────
   if (!sponsorData) {
     return (
       <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center px-4 pt-28 pb-16">
@@ -140,7 +325,12 @@ const SponsorMarketing: React.FC = () => {
               </button>
             </form>
 
-            <p className="text-[9px] font-bold text-zinc-700 text-center">
+            <button onClick={() => setForgotMode(true)}
+              className="w-full text-center text-[9px] font-bold text-zinc-600 hover:text-red-500 uppercase tracking-widest transition-colors">
+              ¿Olvidaste tu contraseña?
+            </button>
+
+            <p className="text-[9px] font-bold text-zinc-700 text-center pt-2 border-t border-zinc-900">
               ¿Querés ser patrocinador? Contactanos por WhatsApp.
             </p>
           </div>
@@ -149,6 +339,7 @@ const SponsorMarketing: React.FC = () => {
     );
   }
 
+  // ── DASHBOARD ──────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0d0d0d] px-4 pt-28 pb-16">
       <div className="max-w-5xl mx-auto space-y-8">
@@ -169,10 +360,14 @@ const SponsorMarketing: React.FC = () => {
               {sponsorData?.name} · {sponsorData?.sponsor_code}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button onClick={loadDashboard}
               className="flex items-center gap-2 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-all">
               <RefreshCw size={14} className={statsLoading ? 'animate-spin' : ''} /> Actualizar
+            </button>
+            <button onClick={() => setShowChangePwd(!showChangePwd)}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-all">
+              <Key size={14} /> Contraseña
             </button>
             <button onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white hover:bg-red-700 transition-all">
@@ -180,6 +375,37 @@ const SponsorMarketing: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Change Password */}
+        {showChangePwd && (
+          <form onSubmit={handleChangePassword} className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <Key size={20} className="text-red-600" />
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Cambiar Contraseña</p>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-4">
+              <input type="password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)}
+                placeholder="Contraseña actual"
+                className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl text-sm outline-none focus:border-red-600" />
+              <input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                placeholder="Nueva contraseña"
+                className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl text-sm outline-none focus:border-red-600" />
+              <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+                placeholder="Confirmar nueva"
+                className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl text-sm outline-none focus:border-red-600" />
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => { setShowChangePwd(false); setCurrentPwd(''); setNewPwd(''); setConfirmPwd(''); }}
+                className="flex-1 bg-zinc-900 text-zinc-500 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-800">
+                Cancelar
+              </button>
+              <button type="submit" disabled={changingPwd}
+                className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 disabled:opacity-50">
+                {changingPwd ? 'Guardando...' : 'Actualizar'}
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 space-y-3">
           <div className="flex items-center gap-3">
