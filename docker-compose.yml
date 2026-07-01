@@ -9,7 +9,7 @@ services:
       MYSQL_DATABASE: bachestic_db_sponsors
       MYSQL_ROOT_PASSWORD: root_password_seguro
     volumes:
-      - bachestic_db_data:/var/lib/mysql
+      - bachestic_sponsors_db_data:/var/lib/mysql
     ports:
       - 3307:3306
     networks:
@@ -24,7 +24,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bachestic-backend
+    container_name: bachestic-sponsors-backend
     restart: always
     environment:
       - DATABASE_URL=mysql://root:root_password_seguro@db:3306/bachestic_db_sponsors
@@ -56,7 +56,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: bachestic-frontend
+    container_name: bachestic-sponsors-frontend
     restart: always
     ports:
       - "5180:5173"
