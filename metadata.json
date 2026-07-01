@@ -1,0 +1,8 @@
+{
+  "name": "Bachestic Sport",
+  "description": "A high-performance sports event management and e-commerce platform featuring a modern urban aesthetic, real-time inventory, and tournament scheduling.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
