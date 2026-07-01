@@ -70,4 +70,4 @@ networks:
     driver: bridge
 
 volumes:
-  bachestic_db_data:
+  bachestic_sponsors_db_data:
