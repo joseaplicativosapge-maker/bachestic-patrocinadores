@@ -33,6 +33,7 @@ services:
       - VITE_API_BASE=https://sponsors.bachestic.com
       - FRONTEND_URL=https://sponsors.bachestic.com
       - WOMPI_ENV=production
+
       # Wompi Bachestic
       - WOMPI_PUBLIC_KEY_BACHESTIC=pub_test_xxxxx
       - WOMPI_PRIVATE_KEY_BACHESTIC=prv_test_xxxxx
